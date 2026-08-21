@@ -9,17 +9,13 @@
  * both guides the model and, composited afterwards, contains it.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PaintStroke, Zone } from "@/lib/editor/types";
+import type { PaintStroke } from "@/lib/editor/types";
 
 type Props = {
   imageUrl: string | null;
   width: number;
   height: number;
-  zones: Zone[];
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
-  /** Labels can be hidden outright — sometimes you just want to look. */
-  showLabels?: boolean;
+
   /** A finished render to show over the photo. Null shows the photo alone. */
   renderUrl?: string | null;
   /** Shown over the stage while a render is in flight. */
@@ -39,10 +35,7 @@ export function Stage({
   imageUrl,
   width,
   height,
-  zones,
-  selectedId,
-  onSelect,
-  showLabels = true,
+
   renderUrl = null,
   busyNote = null,
   onBackToPhoto,
@@ -193,8 +186,6 @@ export function Stage({
 
   /* ----------------------------------------------------------------- view */
 
-  const selectedZone = zones.find((z) => z.id === selectedId) ?? null;
-
   return (
     <div
       ref={frameRef}
@@ -275,59 +266,6 @@ export function Stage({
             />
           )}
 
-          {/* The selected zone's actual region, tinted. Selection has to be
-              visible ON the photo — a chip changing colour across the screen is
-              not feedback, it is a rumour of feedback. The mask PNG doubles as
-              a CSS mask, so the tint lands exactly on the detected shape. */}
-          {selectedZone && !showing && !painting && (
-            <div
-              className="pointer-events-none absolute inset-0"
-              style={{
-                backgroundColor: "rgb(39 76 62 / 0.35)",
-                WebkitMaskImage: `url(${selectedZone.maskUrl})`,
-                maskImage: `url(${selectedZone.maskUrl})`,
-                WebkitMaskSize: "100% 100%",
-                maskSize: "100% 100%",
-                WebkitMaskRepeat: "no-repeat",
-                maskRepeat: "no-repeat",
-              }}
-            />
-          )}
-
-          {/* Labels. Click one to aim the next edit; click it again to let the
-              whole room be the target. Hidden over a render (they describe the
-              photo), while painting (they block the brush), and when toggled
-              off outright. */}
-          {showLabels && !showing && !painting &&
-            zones.map((zone) => {
-              const active = zone.id === selectedId;
-              return (
-                <button
-                  key={zone.id}
-                  onClick={() => onSelect(active ? null : zone.id)}
-                  className={`absolute flex h-[30px] -translate-x-1/2 -translate-y-1/2 items-center gap-[7px] whitespace-nowrap rounded-full border py-0 pl-[10px] pr-3 text-xs font-semibold tracking-[.01em] shadow-[0_6px_16px_rgb(25_25_22/0.14)] backdrop-blur-[4px] transition-transform duration-150 hover:-translate-y-[calc(50%+1px)] ${
-                    active
-                      ? "border-pine bg-pine text-white"
-                      : "border-hairline bg-white/[.92] text-pine hover:border-pine"
-                  }`}
-                  style={{
-                    left: `${zone.anchor.x * 100}%`,
-                    top: `${zone.anchor.y * 100}%`,
-                  }}
-                >
-                  <span
-                    className="h-[7px] w-[7px] rounded-full"
-                    style={{
-                      background: active ? "#fff" : `rgb(${zone.tint.join(",")})`,
-                      boxShadow: active
-                        ? "0 0 0 3px rgb(255 255 255 / .25)"
-                        : `0 0 0 3px rgb(${zone.tint.join(",")} / .18)`,
-                    }}
-                  />
-                  {zone.label}
-                </button>
-              );
-            })}
 
           {/* Paint toolbar. Top-centre, where the hand already is. */}
           {painting && (

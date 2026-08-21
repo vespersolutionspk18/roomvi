@@ -28,13 +28,11 @@ export function Editor({ imageId }: { imageId: string }) {
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [references, setReferences] = useState<Reference[]>([]);
   const [uploadingRef, setUploadingRef] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   // Stage chrome.
-  const [labelsVisible, setLabelsVisible] = useState(true);
   const [paintMode, setPaintMode] = useState(false);
   const [strokes, setStrokes] = useState<PaintStroke[]>([]);
   /** True when the user dismissed the render to look at (or paint on) the photo. */
@@ -302,7 +300,6 @@ export function Editor({ imageId }: { imageId: string }) {
           {
             kind: "prompt",
             prompt,
-            ...(selectedZoneId ? { surfaceId: selectedZoneId } : {}),
             ...(references.length ? { referenceKeys: references.map((r) => r.key) } : {}),
             ...(maskKey ? { maskKey } : {}),
           },
@@ -332,7 +329,7 @@ export function Editor({ imageId }: { imageId: string }) {
         // worth a retry loop.
       }
     },
-    [strokes, surfaces, imageId, selectedZoneId, references, activeId, render, say, fetchHistory],
+    [strokes, surfaces, imageId, references, activeId, render, say, fetchHistory],
   );
 
   useEffect(() => {
@@ -363,14 +360,9 @@ export function Editor({ imageId }: { imageId: string }) {
 
   /* ----------------------------------------------------------------- view */
 
-  const zones = surfaces?.zones ?? [];
-
   return (
     <div className="flex h-screen w-screen overflow-hidden">
       <ReferencePanel
-        zones={zones}
-        selectedZoneId={selectedZoneId}
-        onSelectZone={setSelectedZoneId}
         references={references}
         onToggleReference={toggleReference}
         onUploadReference={uploadReference}
@@ -401,26 +393,6 @@ export function Editor({ imageId }: { imageId: string }) {
 
           <div className="flex items-center gap-1">
             {/* Labels off is a legitimate way to look at a room. */}
-            <HeaderToggle
-              active={labelsVisible}
-              onClick={() => setLabelsVisible((v) => !v)}
-              title={labelsVisible ? "Hide labels" : "Show labels"}
-            >
-              {labelsVisible ? (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-[16px] w-[16px]" aria-hidden="true">
-                  <path d="M12 5.5c-4.2 0-7 4-7.5 6.5.5 2.5 3.3 6.5 7.5 6.5s7-4 7.5-6.5C19 9.5 16.2 5.5 12 5.5Z" />
-                  <circle cx="12" cy="12" r="2.4" />
-                </svg>
-              ) : (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-[16px] w-[16px]" aria-hidden="true">
-                  <path d="M4.5 12c.9-1.9 2.2-3.6 3.8-4.8M12 5.5c4.2 0 7 4 7.5 6.5-.3 1.4-1.1 2.9-2.3 4.2M9.9 6.1A7.7 7.7 0 0 1 12 5.5" />
-                  <path d="M14.4 9.6a2.4 2.4 0 0 1-3.3 3.3" />
-                  <path d="m4.5 4.5 15 15" />
-                </svg>
-              )}
-              <span>{labelsVisible ? "Labels" : "Labels off"}</span>
-            </HeaderToggle>
-
             <HeaderToggle
               active={paintMode}
               onClick={() => {
@@ -492,10 +464,6 @@ export function Editor({ imageId }: { imageId: string }) {
               imageUrl={surfaces?.imageUrl ?? null}
               width={surfaces?.width ?? 1}
               height={surfaces?.height ?? 1}
-              zones={zones}
-              selectedId={selectedZoneId}
-              onSelect={setSelectedZoneId}
-              showLabels={labelsVisible}
               renderUrl={stageRenderUrl}
               busyNote={busyNote}
               onBackToPhoto={stageRenderUrl ? () => setPhotoView(true) : undefined}
@@ -507,8 +475,6 @@ export function Editor({ imageId }: { imageId: string }) {
             {/* Absolute end of the page: the chat bar is the last element, full
                 width, where every chat input lives. */}
             <ChatBar
-              zones={zones}
-              selectedZoneId={selectedZoneId}
               busy={render.busy}
               hasPaint={strokes.length > 0}
               onSubmit={(p) => void handlePrompt(p)}

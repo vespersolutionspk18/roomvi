@@ -3,26 +3,21 @@
 /**
  * The chat bar — the last thing on the page, the way every chat input works.
  *
- * One sentence is the whole interface: what to change, aimed by the selected
- * label, dressed with whatever references are picked. Enter sends; the busy
- * state lives in the stage scrim.
+ * One sentence is the whole interface: what to change, dressed with whatever
+ * references are picked. Enter sends; the busy state lives in the stage scrim.
  */
 import { useRef, useState } from "react";
-import type { Zone } from "@/lib/editor/types";
 
 type Props = {
-  zones: Zone[];
-  selectedZoneId: string | null;
   busy: boolean;
   /** A painted region is waiting — the sentence should describe what goes IN it. */
   hasPaint?: boolean;
   onSubmit: (prompt: string) => void;
 };
 
-export function ChatBar({ zones, selectedZoneId, busy, hasPaint = false, onSubmit }: Props) {
+export function ChatBar({ busy, hasPaint = false, onSubmit }: Props) {
   const [value, setValue] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const selectedZone = zones.find((z) => z.id === selectedZoneId) ?? null;
 
   const send = () => {
     const text = value.trim();
@@ -34,18 +29,6 @@ export function ChatBar({ zones, selectedZoneId, busy, hasPaint = false, onSubmi
 
   return (
     <div className="flex flex-shrink-0 items-center gap-2.5 rounded-card border border-hairline bg-panel py-2 pl-3 pr-2 shadow-lift">
-      {/* What the sentence will be aimed at — visible where it is formed, not in
-          a panel the eye has left. */}
-      {selectedZone && (
-        <span className="flex h-7 flex-shrink-0 items-center gap-1.5 rounded-full bg-pine-tint px-2.5 text-[11px] font-semibold text-pine">
-          <span
-            className="h-[6px] w-[6px] rounded-full"
-            style={{ background: `rgb(${selectedZone.tint.join(",")})` }}
-          />
-          {selectedZone.label}
-        </span>
-      )}
-
       <textarea
         ref={inputRef}
         rows={1}
@@ -65,9 +48,7 @@ export function ChatBar({ zones, selectedZoneId, busy, hasPaint = false, onSubmi
         placeholder={
           hasPaint
             ? "What should appear in the painted area?"
-            : selectedZone
-              ? `Change the ${selectedZone.label.toLowerCase()}…`
-              : "Describe the change…"
+            : "Describe the change…"
         }
         aria-label="Describe the change"
         disabled={busy}
