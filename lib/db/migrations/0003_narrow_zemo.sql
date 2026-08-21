@@ -1,0 +1,1 @@
+ALTER TABLE "renders" ALTER COLUMN "seed" SET DATA TYPE bigint;

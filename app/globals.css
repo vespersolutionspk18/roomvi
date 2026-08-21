@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   roomvi design tokens — ported from showroom/editor.html:11-29
+   Tailwind v4 is CSS-first: tokens declared in @theme become utilities
+   (bg-porcelain, text-pine, font-display, rounded-card, ...).
+--------------------------------------------------------------------------- */
+@theme {
+  /* surfaces */
+  --color-porcelain: #f6f4ef;
+  --color-panel: #ffffff;
+
+  /* ink */
+  --color-ink: #191917;
+  --color-ink-soft: rgb(25 25 23 / 0.62);
+  --color-ink-faint: rgb(25 25 23 / 0.42);
+
+  /* lines */
+  --color-hairline: #e4e0d6;
+  --color-hairline-soft: rgb(25 25 23 / 0.07);
+
+  /* brand greens */
+  --color-pine: #274c3e;
+  --color-pine-dark: #1c3a2f;
+  --color-pine-tint: rgb(39 76 62 / 0.08);
+
+  /* brand brass */
+  --color-brass: #a9834f;
+  --color-brass-tint: rgb(169 131 79 / 0.14);
+
+  /* type — the vars are set by next/font in app/layout.tsx, which self-hosts
+     the files. The literal names stay as fallbacks for when a font fails to
+     load rather than letting the page drop to Times. */
+  --font-display: var(--font-fraunces), "Fraunces", serif;
+  --font-body: var(--font-instrument), "Instrument Sans", system-ui, sans-serif;
+
+  /* geometry */
+  --radius-card: 10px;
+
+  /* elevation */
+  --shadow-card: 0 8px 24px rgb(25 25 22 / 0.06);
+  --shadow-lift: 0 10px 26px rgb(25 25 22 / 0.1);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  /* Paper grain lives IN the background — layered under every panel — rather
+     than as a fixed overlay div, which sat on top of the product. The alpha is
+     the overlay's effective one (0.4 × 0.05 ≈ 0.02) so the texture reads the
+     same, just from underneath. */
+  background:
+    repeating-linear-gradient(0deg, rgb(25 25 23 / 0.02) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgb(25 25 23 / 0.02) 0 1px, transparent 1px 3px),
+    var(--color-porcelain);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Staggered entrance used by the marketing and workspace pages. Pure CSS so the
+   first paint never waits on JS. */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-up {
+  animation: fade-up 0.6s cubic-bezier(0.22, 0.8, 0.36, 1) both;
+}
