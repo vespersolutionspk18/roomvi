@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * Rooms — the workspace dashboard.
  *
@@ -223,3 +225,4 @@ function timeAgo(date: Date): string {
   if (days < 30) return `${days}d ago`;
   return date.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
+

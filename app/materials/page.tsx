@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * Materials — the public library. Server page reads the catalogue once; the
  * browser component owns the filtering.
@@ -64,3 +66,4 @@ export default async function MaterialsPage() {
     </div>
   );
 }
+

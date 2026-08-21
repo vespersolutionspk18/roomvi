@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * Project — one room's story: the compare, what is in it, and every render
  * version. Reads straight from the DB in the server component; the only client

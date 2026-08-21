@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * New room — the upload flow, moved off the landing so the marketing page can
  * breathe. Carries the recent-rooms strip: analyze costs real money per photo,
@@ -75,3 +77,4 @@ export default async function NewRoom() {
     </div>
   );
 }
+

@@ -13,14 +13,22 @@ import { createReadStream, type ReadStream } from "node:fs";
 import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-const ROOT = path.resolve(process.cwd(), process.env.STORAGE_DIR ?? "./storage");
+// turbopackIgnore: the storage root is deployment configuration (STORAGE_DIR),
+// not something the bundler can or should trace.
+const ROOT = path.resolve(
+  /* turbopackIgnore: true */ process.cwd(),
+  process.env.STORAGE_DIR ?? "./storage",
+);
 
 /** Reject keys that would escape the storage root. */
 function assertSafeKey(key: string): void {
   if (!key || key.startsWith("/") || key.includes("\\") || key.includes("\0")) {
     throw new Error(`Unsafe storage key: ${JSON.stringify(key)}`);
   }
-  const resolved = path.resolve(ROOT, key);
+  // turbopackIgnore: the root is runtime configuration (STORAGE_DIR), not a
+  // bundler concern — there is nothing to trace, and guessing otherwise makes
+  // Turbopack sweep the whole project into the server output.
+  const resolved = path.resolve(/* turbopackIgnore: true */ ROOT, key);
   const rel = path.relative(ROOT, resolved);
   if (rel.startsWith("..") || path.isAbsolute(rel)) {
     throw new Error(`Storage key escapes root: ${JSON.stringify(key)}`);
@@ -30,7 +38,7 @@ function assertSafeKey(key: string): void {
 /** Absolute on-disk path for a key. Use only where a real path is required. */
 export function absolutePath(key: string): string {
   assertSafeKey(key);
-  return path.resolve(ROOT, key);
+  return path.resolve(/* turbopackIgnore: true */ ROOT, key);
 }
 
 export async function put(key: string, data: Buffer | Uint8Array): Promise<string> {

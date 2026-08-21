@@ -20,8 +20,11 @@ export type SessionUser = {
 };
 
 export async function resolveUser(): Promise<SessionUser> {
-  if (process.env.NODE_ENV === "production") {
-    // Fail loudly rather than silently serving every visitor the same account.
+  // Production refuses by default: silently serving every visitor one shared
+  // account would be the worst kind of bug. An explicit ALLOW_DEV_SESSION=1
+  // opts a deployment into the single-user dev session anyway — the honest way
+  // to run a demo before Phase 8 auth exists, because someone decided it.
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEV_SESSION !== "1") {
     throw new Error("resolveUser: no session implementation (Phase 8 pending)");
   }
 

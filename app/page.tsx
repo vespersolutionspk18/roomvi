@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * Landing — the showroom's index.html, ported and wired to real data.
  *
@@ -381,3 +383,4 @@ export default async function Home() {
     </div>
   );
 }
+

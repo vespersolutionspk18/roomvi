@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * Pricing — the showroom's pricing.html, ported. Static by design: the plans
  * are marketing copy, while the actual spend control lives in the credit ledger
@@ -192,3 +194,4 @@ export default async function PricingPage() {
     </div>
   );
 }
+
