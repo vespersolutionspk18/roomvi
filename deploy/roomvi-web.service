@@ -1,0 +1,19 @@
+[Unit]
+Description=roomvi web (+ in-process job runner)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=roomvi
+WorkingDirectory=/opt/roomvi/frontend
+EnvironmentFile=/opt/roomvi/frontend/.env.local
+ExecStart=/usr/bin/npm run start
+Restart=always
+RestartSec=3
+# The in-process runner is I/O bound, but cap memory anyway so a runaway
+# render can never take the box down.
+MemoryMax=1500M
+
+[Install]
+WantedBy=multi-user.target

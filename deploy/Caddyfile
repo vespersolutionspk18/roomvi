@@ -1,0 +1,8 @@
+# Reverse proxy. Point your domain's A record here, then replace :80 with the
+# domain — Caddy fetches and renews TLS automatically.
+#   example.com {
+#     reverse_proxy 127.0.0.1:3000
+#   }
+:80 {
+	reverse_proxy 127.0.0.1:3000
+}
