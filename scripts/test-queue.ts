@@ -56,6 +56,30 @@ async function assertQueueIdle(): Promise<void> {
 async function main() {
   await assertQueueIdle();
 
+  // The web server now boots its own job runner (instrumentation.ts), and it is
+  // a LEGITIMATE competitor for claims — stealing this suite's jobs is the
+  // system working. This suite's premise is exclusive claiming, so detect a
+  // live runner with a canary and skip rather than report false failures.
+  const canary = await enqueue({
+    kind: "mipmap",
+    payload: { tag: TAG, sku: "__canary__" },
+  });
+  for (let i = 0; i < 10; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    const row = await db.query.jobs.findFirst({ where: eq(jobs.id, canary.job.id) });
+    if (!row || row.status !== "queued") {
+      console.log(
+        "\nSKIP: a live job runner is draining this queue (the web server starts\n" +
+          "one), so exclusive-claim assertions cannot hold here. Run this suite on an\n" +
+          "isolated database, or start the server with DISABLE_JOB_RUNNER=1.",
+      );
+      await cleanup();
+      return;
+    }
+  }
+  // Canary unclaimed after 5s: no competitor. Remove it and proceed.
+  await db.delete(jobs).where(eq(jobs.id, canary.job.id));
+
   console.log("\n1. enqueue + claim + complete");
   {
     const { job, created } = await enqueue({
