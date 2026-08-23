@@ -87,6 +87,19 @@ const BodySchema = z.object({
    * would leak their work into yours.
    */
   baseRenderId: z.string().min(1).nullish(),
+  /**
+   * OUTPAINT request: grow the canvas to the given aspect ratio and have the
+   * model fill what's new. The server owns the pad math (it knows the real
+   * display dimensions); the client only expresses intent — "make it match my
+   * screen". The original photograph region is composited back afterwards, so
+   * generation can only ever ADD scenery around it, never alter it.
+   */
+  expand: z
+    .object({
+      ratioW: z.number().positive().max(10),
+      ratioH: z.number().positive().max(10),
+    })
+    .optional(),
 });
 
 function bad(code: string, message: string, status = 400) {
@@ -137,6 +150,53 @@ export async function POST(request: Request) {
       );
     }
     baseRenderId = base.id;
+  }
+
+  /* --------------------------------------------------- the expand, if any */
+
+  let expandSpec: {
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+    width: number;
+    height: number;
+  } | null = null;
+  if (body.expand) {
+    const W = image.displayWidth!;
+    const H = image.displayHeight!;
+    const target = body.expand.ratioW / body.expand.ratioH;
+    const current = W / H;
+
+    // Within 2% of the target there is nothing meaningful to generate — refuse
+    // rather than bill a render for two pixels of sky.
+    if (Math.abs(target - current) / current < 0.02) {
+      return bad(
+        "already_matches",
+        "That photo already matches this aspect ratio — nothing to expand.",
+        409,
+      );
+    }
+
+    // The original sits centred inside the new canvas; generation fills only
+    // the border. Dimensions stay in display space, where every other
+    // coordinate in the product lives.
+    let width = W;
+    let height = H;
+    let left = 0;
+    let right = 0;
+    let top = 0;
+    let bottom = 0;
+    if (current < target) {
+      width = Math.round(H * target);
+      left = Math.floor((width - W) / 2);
+      right = width - W - left;
+    } else {
+      height = Math.round(W / target);
+      top = Math.floor((height - H) / 2);
+      bottom = height - H - top;
+    }
+    expandSpec = { left, right, top, bottom, width, height };
   }
 
   const zones = await db.query.surfaces.findMany({ where: eq(surfaces.imageId, body.imageId) });
@@ -288,8 +348,10 @@ export async function POST(request: Request) {
       executor === "precision" && r.surfaceId ? planeKey(byId.get(r.surfaceId)?.plane) : null,
     ]),
     // And the base above all: "make it warmer" on the original and on last
-    // night's experiment are two entirely different commissions.
+    // night's experiment are two entirely different commissions. Same for the
+    // requested expansion ratio.
     base: baseRenderId,
+    expand: expandSpec,
   });
   const idempotencyKey = `render:${body.imageId}:${executor === "precision" ? "p:" : ""}${hash(fingerprint)}${body.seed != null ? `:${body.seed}` : ""}`;
 
@@ -346,6 +408,7 @@ export async function POST(request: Request) {
           renderId: row.id,
           userId: user.id,
           ...(baseRenderId ? { baseRenderId } : {}),
+          ...(expandSpec ? { expand: expandSpec } : {}),
         },
         idempotencyKey,
         // Below analyze: a photo with no surfaces cannot render at all, so

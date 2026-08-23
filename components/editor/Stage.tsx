@@ -22,6 +22,8 @@ type Props = {
   busyNote?: string | null;
   /** Present when the editor can dismiss the render and return to the photo. */
   onBackToPhoto?: () => void;
+  /** Fired with the stage frame's w/h ratio whenever it resizes. */
+  onFrameRatio?: (ratio: number) => void;
   /** Paint mode on: the pointer becomes a brush and labels step aside. */
   paintMode?: boolean;
   strokes: PaintStroke[];
@@ -39,6 +41,7 @@ export function Stage({
   renderUrl = null,
   busyNote = null,
   onBackToPhoto,
+  onFrameRatio,
   paintMode = false,
   strokes,
   onStrokesChange,
@@ -48,6 +51,8 @@ export function Stage({
   /** Wipe position, 0-1. Only meaningful while a render is displayed. */
   const [wipe, setWipe] = useState(1);
   const dragging = useRef(false);
+  /** Contain-fitted box size, recomputed on resize. Null until first measure. */
+  const [fit, setFit] = useState<{ w: number; h: number } | null>(null);
 
   // Painting state. `current` is the in-flight stroke; version bumps redraw.
   const current = useRef<PaintStroke | null>(null);
@@ -153,10 +158,35 @@ export function Stage({
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame) return;
-    const ro = new ResizeObserver(() => redraw());
+    const ro = new ResizeObserver(() => {
+      redraw();
+      // Report the frame's ratio upward so "Expand" can offer to outpaint the
+      // photo to exactly what the user's viewport shows.
+      const r = frame.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) onFrameRatio?.(r.width / r.height);
+    });
     ro.observe(frame);
     return () => ro.disconnect();
-  }, [redraw]);
+  }, [redraw, onFrameRatio]);
+
+  // Pixel-exact contain-fit of the image ratio inside the measured frame.
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame || !width || !height) return;
+    const measure = () => {
+      const r = frame.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2) return;
+      const scale = Math.min(r.width / width, r.height / height);
+      setFit({
+        w: Math.max(1, Math.floor(width * scale)),
+        h: Math.max(1, Math.floor(height * scale)),
+      });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(frame);
+    return () => ro.disconnect();
+  }, [width, height]);
 
   const onPaintDown = (e: React.PointerEvent) => {
     if (!painting) return;
@@ -191,11 +221,19 @@ export function Stage({
       ref={frameRef}
       className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-hairline bg-porcelain shadow-card"
     >
-      {/* aspect-ratio box: keeps every overlay in lockstep with the photo. */}
+      {/* aspect-ratio box: keeps every overlay in lockstep with the photo.
+          Measured in JS, not trusted to CSS aspect-ratio + max constraints —
+          those quietly break the ratio on constrained heights, which reads as
+          crop. This box is EXACTLY the photo's ratio at the largest size that
+          fits, so the full image is always visible, uncropped. */}
       <div className="absolute inset-0 grid place-items-center">
         <div
-          className="relative max-h-full max-w-full"
-          style={{ aspectRatio: `${width} / ${height}`, width: "100%" }}
+          className="relative"
+          style={
+            fit
+              ? { width: fit.w, height: fit.h }
+              : { aspectRatio: `${width} / ${height}`, width: "100%" }
+          }
         >
           {imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element

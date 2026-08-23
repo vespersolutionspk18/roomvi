@@ -558,6 +558,32 @@ async function runRender(renderId: string, job: Job, ctx: HandlerContext): Promi
     photo = await storage.get(image.displayKey);
   }
 
+  // OUTPAINT spec from the route (validated there; re-checked for shape here
+  // because a retry can land long after submit-time checks).
+  const p = job.payload.expand as Record<string, unknown> | undefined;
+  const expand =
+    p &&
+    typeof p.left === "number" &&
+    typeof p.right === "number" &&
+    typeof p.top === "number" &&
+    typeof p.bottom === "number" &&
+    typeof p.width === "number" &&
+    typeof p.height === "number" &&
+    p.width <= 6000 &&
+    p.height <= 6000
+      ? {
+          left: p.left,
+          right: p.right,
+          top: p.top,
+          bottom: p.bottom,
+          width: p.width,
+          height: p.height,
+        }
+      : undefined;
+  if (job.payload.expand && !expand) {
+    throw new PermanentError("render: malformed expand payload");
+  }
+
   const result = await execute({
     photo,
     width: image.displayWidth,
@@ -566,6 +592,7 @@ async function runRender(renderId: string, job: Job, ctx: HandlerContext): Promi
     loadMask: (key) => storage.get(key),
     loadTexture: (key) => storage.get(key),
     loadReference: (key) => storage.get(key),
+    expand,
     seed: row.seed,
     /**
      * The id from a previous attempt, if there was one. THIS is what makes the

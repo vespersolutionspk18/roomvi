@@ -37,6 +37,8 @@ export function Editor({ imageId }: { imageId: string }) {
   const [strokes, setStrokes] = useState<PaintStroke[]>([]);
   /** True when the user dismissed the render to look at (or paint on) the photo. */
   const [photoView, setPhotoView] = useState(false);
+  /** The stage frame's live aspect ratio — what "Expand" fills toward. */
+  const [frameRatio, setFrameRatio] = useState<number | null>(null);
 
   // Version history. `activeId` is the current truth: the version on stage,
   // badged in the rail, and the canvas the next prompt edits. A finished render
@@ -263,6 +265,16 @@ export function Editor({ imageId }: { imageId: string }) {
 
   /* --------------------------------------------------------------- render */
 
+  /** Expand: outpaint the active version to match the user's viewport ratio.
+      The ratio is the stage frame's own — expansion exists so the photo can
+      fill what the user actually sees. */
+  const handleExpand = useCallback(() => {
+    if (!surfaces || render.busy || !frameRatio) return;
+    render.submit(
+      [{ kind: "prompt", prompt: "Expand the scene outward to fill the frame." }],
+      { baseRenderId: activeId ?? null, expand: { ratioW: frameRatio, ratioH: 1 } },
+    );
+  }, [surfaces, frameRatio, activeId, render]);
   const handlePrompt = useCallback(
     async (prompt: string) => {
       let maskKey: string | undefined;
@@ -410,6 +422,15 @@ export function Editor({ imageId }: { imageId: string }) {
               </svg>
               <span>Paint</span>
             </HeaderToggle>
+            <HeaderButton onClick={() => handleExpand()} disabled={!frameRatio || render.busy}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-[16px] w-[16px]" aria-hidden="true">
+                <path d="M15 3h6v6" />
+                <path d="M9 21H3v-6" />
+                <path d="M21 3l-7 7" />
+                <path d="M3 21l7-7" />
+              </svg>
+              Expand
+            </HeaderButton>
 
             <div className="mx-1 h-5 w-px bg-hairline" />
 
@@ -468,6 +489,7 @@ export function Editor({ imageId }: { imageId: string }) {
               busyNote={busyNote}
               onBackToPhoto={stageRenderUrl ? () => setPhotoView(true) : undefined}
               paintMode={paintMode}
+              onFrameRatio={setFrameRatio}
               strokes={strokes}
               onStrokesChange={setStrokes}
             />

@@ -122,7 +122,13 @@ export function useRender(imageId: string) {
   const submit = useCallback(
     async (
       ops: RenderOpInput[],
-      opts: { seed?: number | null; executor?: Executor; baseRenderId?: string | null } = {},
+      opts: {
+        seed?: number | null;
+        executor?: Executor;
+        baseRenderId?: string | null;
+        /** Ask the server to outpaint this render to the given aspect ratio. */
+        expand?: { ratioW: number; ratioH: number };
+      } = {},
     ) => {
       // Not merely a nicety: without it a double-click sends two requests, and
       // while the server collapses them, the second still races the first's poll.
@@ -148,6 +154,7 @@ export function useRender(imageId: string) {
             // Present only when building on a selected version; omitted means
             // the original photo, which is the server's default too.
             ...(opts.baseRenderId ? { baseRenderId: opts.baseRenderId } : {}),
+            ...(opts.expand ? { expand: opts.expand } : {}),
           }),
         });
         const body = await res.json();

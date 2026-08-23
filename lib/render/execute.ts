@@ -99,6 +99,20 @@ export type ExecuteInput = {
   loadTexture: (key: string) => Promise<Buffer>;
   /** Reads a user-supplied reference image by storage key. */
   loadReference: (key: string) => Promise<Buffer>;
+  /**
+   * OUTPAINT: pad the photo by these amounts (white), let the model fill the
+   * border, then composite the ORIGINAL photograph back over its exact region
+   * with a feathered edge. Generation can only add scenery around the shot,
+   * never alter it.
+   */
+  expand?: {
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+    width: number;
+    height: number;
+  };
   seed?: number | null;
   /**
    * An id from a previous attempt at this same render.
@@ -212,6 +226,26 @@ export async function execute(input: ExecuteInput): Promise<ExecuteResult> {
 
   const firstMaterial = ops.find((o): o is MaterialOp => o.kind === "material");
 
+  // Build the outpaint canvas: the photo centred on a white field at the
+  // target ratio. The white IS the instruction — the model sees exactly where
+  // scenery must appear, in the exact layout it must appear in.
+  let inputImage = photo;
+  if (input.expand) {
+    inputImage = await sharp(photo)
+      .extend({
+        left: input.expand.left,
+        right: input.expand.right,
+        top: input.expand.top,
+        bottom: input.expand.bottom,
+        background: { r: 255, g: 255, b: 255 },
+      })
+      .png()
+      .toBuffer();
+    await input.onProgress?.(
+      `outpaint canvas ${input.expand.width}x${input.expand.height} prepared`,
+    );
+  }
+
   // A painted region is a HINT about where the user wants the change, not a
   // stencil. It rides to the model as a guide image with softened language —
   // "focus here, extend naturally" — because a hard composite through the
@@ -247,7 +281,7 @@ export async function execute(input: ExecuteInput): Promise<ExecuteResult> {
     requestId = input.resume.requestId;
     await input.onProgress?.(`resuming ${endpoint} ${requestId} — already paid for`);
   } else {
-    const photoUrl = await fal.upload(photo, "room.jpg", "image/jpeg");
+    const photoUrl = await fal.upload(inputImage, "room.jpg", "image/jpeg");
     await input.onProgress?.("photo uploaded");
 
     let falInput: Record<string, unknown>;
@@ -301,9 +335,15 @@ export async function execute(input: ExecuteInput): Promise<ExecuteResult> {
       // painted area as the centre of gravity and letting the model honour
       // physics at its edges is what makes the result look placed rather than
       // pasted.
-      const guidedPrompt = paintMaskUrl
-        ? `${prompt}\nThe final image marks where the user wants this change focused. Make the change there, and extend it naturally wherever physics requires — shadows, reflections, perspective, anything the change would realistically touch. Do not make unrelated changes elsewhere in the room.`
-        : prompt;
+      let guidedPrompt = prompt;
+      if (paintMaskUrl) {
+        guidedPrompt += `
+The final image marks where the user wants this change focused. Make the change there, and extend it naturally wherever physics requires - shadows, reflections, perspective, anything the change would realistically touch. Do not make unrelated changes elsewhere in the room.`;
+      }
+      if (input.expand) {
+        guidedPrompt += `
+The photograph sits centred on a white border. Fill ONLY that white border by extending the scene outward - walls continue, the floor continues, ceiling and lighting continue - so the result reads as one photograph taken with a wider lens. Reproduce the existing photograph exactly; change nothing inside it. No text, no watermarks, no frames.`;
+      }
 
       falInput = {
         prompt: guidedPrompt,
@@ -350,7 +390,51 @@ export async function execute(input: ExecuteInput): Promise<ExecuteResult> {
   let outWidth = width;
   let outHeight = height;
 
-  if (shouldComposite && mask) {
+  if (input.expand) {
+    // OUTPAINT COMPOSITE. The model filled our padded canvas; now the original
+    // photograph goes back over its exact region with a feathered alpha, so
+    // generation can only ever exist AROUND the shot. What the user framed is
+    // byte-for-byte what they keep.
+    const ex = input.expand;
+    const F = Math.max(12, Math.round(Math.min(ex.width, ex.height) * 0.015));
+    const alpha = await sharp({
+      create: { width: ex.width, height: ex.height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    })
+      .composite([
+        {
+          input: await sharp({
+            create: {
+              width: width - 2 * F,
+              height: height - 2 * F,
+              channels: 4,
+              background: { r: 255, g: 255, b: 255, alpha: 1 },
+            },
+          })
+            .png()
+            .toBuffer(),
+          left: ex.left + F,
+          top: ex.top + F,
+        },
+      ])
+      .blur(F / 2)
+      .png()
+      .toBuffer();
+
+    const originalFeathered = await sharp(photo)
+      .ensureAlpha()
+      .composite([{ input: alpha, blend: "dest-in" }])
+      .png()
+      .toBuffer();
+
+    finalJpeg = await sharp(edited)
+      .resize(ex.width, ex.height, { fit: "fill", kernel: "lanczos3" })
+      .composite([{ input: originalFeathered, left: ex.left, top: ex.top }])
+      .jpeg({ quality: 92, chromaSubsampling: "4:4:4" })
+      .toBuffer();
+    outWidth = ex.width;
+    outHeight = ex.height;
+    await input.onProgress?.("original frame composited back");
+  } else if (shouldComposite && mask) {
     const composed = await compositeThroughMask(photo, edited, mask);
     finalJpeg = composed.jpeg;
     outWidth = composed.width;
