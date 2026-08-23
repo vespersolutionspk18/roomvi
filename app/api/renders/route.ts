@@ -18,7 +18,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { images, materials, projects, renderOps, renders, surfaces, type SurfacePlane } from "@/lib/db/schema";
+import { images, jobs, materials, projects, renderOps, renders, surfaces, type SurfacePlane } from "@/lib/db/schema";
 import { enqueue } from "@/lib/queue";
 import { eligible } from "@/lib/render/precision";
 import { classifyPrompt } from "@/lib/render/prompt";
@@ -373,6 +373,8 @@ export async function POST(request: Request) {
     }
   }
 
+  let duplicateOfPrior = false;
+
   const result = await db.transaction(async (tx) => {
     const [row] = await tx
       .insert(renders)
@@ -399,7 +401,7 @@ export async function POST(request: Request) {
 
     // Enqueued INSIDE the transaction: Postgres defers NOTIFY to COMMIT, so a
     // rollback never wakes a worker for a render row that does not exist.
-    const { job } = await enqueue(
+    const { job, created } = await enqueue(
       {
         kind: "render",
         // baseRenderId rides in the payload: the worker's only instruction about
@@ -418,8 +420,31 @@ export async function POST(request: Request) {
       tx,
     );
 
+    // Dedupe is enforced on JOBS, not renders. A repeat submit reaches here,
+    // inserts its render row, and only then learns this key already belongs to
+    // an earlier job — which points at THAT render, not ours. Roll everything
+    // back and reuse theirs; otherwise this row would sit queued forever with
+    // nothing to run it.
+    if (!created) {
+      duplicateOfPrior = true;
+      await tx.rollback();
+    }
+
     return { row, job };
   });
+
+  if (duplicateOfPrior) {
+    const priorJob = await db.query.jobs.findFirst({
+      where: eq(jobs.idempotencyKey, idempotencyKey),
+    });
+    const priorRenderId = priorJob?.payload?.renderId;
+    if (typeof priorRenderId === "string") {
+      return Response.json(
+        { renderId: priorRenderId, status: "queued", executor, reused: true },
+        { status: 200 },
+      );
+    }
+  }
 
   return Response.json(
     { renderId: result.row.id, jobId: result.job.id, status: "queued", executor },
