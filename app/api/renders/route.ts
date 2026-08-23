@@ -371,11 +371,20 @@ export async function POST(request: Request) {
         { status: 200 },
       );
     }
+    // The prior attempt FAILED permanently. Its dead job still owns the
+    // idempotency key and would block every retry forever — the exact trap
+    // that once needed a recover script for a network-blip render. Clear the
+    // corpse so this submit runs fresh; the failed version stays in history.
+    await db.delete(jobs).where(eq(jobs.id, existingJob.id));
   }
 
   let duplicateOfPrior = false;
 
-  const result = await db.transaction(async (tx) => {
+  type TxResult = { row: typeof renders.$inferSelect; job: typeof jobs.$inferSelect };
+  let result: TxResult | undefined;
+  let txResult: TxResult | undefined;
+  try {
+    result = await db.transaction(async (tx): Promise<TxResult> => {
     const [row] = await tx
       .insert(renders)
       .values({
@@ -430,8 +439,13 @@ export async function POST(request: Request) {
       await tx.rollback();
     }
 
-    return { row, job };
-  });
+      return { row, job };
+    });
+  } catch (err) {
+    // tx.rollback() surfaces as a rejection; that is our dedupe signal here,
+    // not a failure. Anything else is real and rethrown.
+    if (!duplicateOfPrior) throw err;
+  }
 
   if (duplicateOfPrior) {
     const priorJob = await db.query.jobs.findFirst({
@@ -444,6 +458,12 @@ export async function POST(request: Request) {
         { status: 200 },
       );
     }
+  }
+
+  if (!result) {
+    // Unreachable: either the transaction resolved or duplicateOfPrior returned
+    // above. Kept for the type checker.
+    return bad("internal", "The render could not be created.", 500);
   }
 
   return Response.json(
