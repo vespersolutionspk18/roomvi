@@ -397,8 +397,11 @@ The photograph sits centred on a white border. Fill ONLY that white border by ex
     // byte-for-byte what they keep.
     const ex = input.expand;
     const F = Math.max(12, Math.round(Math.min(ex.width, ex.height) * 0.015));
+    // Alpha lives at the ORIGINAL'S size - it is applied via dest-in to the
+    // photo before it goes anywhere near the larger canvas, and sharp refuses
+    // composite inputs larger than their base.
     const alpha = await sharp({
-      create: { width: ex.width, height: ex.height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+      create: { width: width, height: height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
     })
       .composite([
         {
@@ -412,8 +415,8 @@ The photograph sits centred on a white border. Fill ONLY that white border by ex
           })
             .png()
             .toBuffer(),
-          left: ex.left + F,
-          top: ex.top + F,
+          left: F,
+          top: F,
         },
       ])
       .blur(F / 2)
